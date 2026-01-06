@@ -101,6 +101,16 @@ namespace VDKTool
                     }
                     return ConvertXLSXtoCT(args[1]);
 
+                case "pack":
+                case "p":
+                    if (args.Length < 2)
+                    {
+                        Console.WriteLine("Error: Source directory required");
+                        PrintUsage();
+                        return 1;
+                    }
+                    return PackDirectory(args);
+
                 case "help":
                 case "-h":
                 case "--help":
@@ -127,6 +137,8 @@ namespace VDKTool
             Console.WriteLine("                                       - Extract all VDKs in directory");
             Console.WriteLine("                                         suffix defaults to _UNPACKED");
             Console.WriteLine("  VDK_Tool.exe list <file.vdk>         - List VDK contents");
+            Console.WriteLine("  VDK_Tool.exe pack <dir> [output.vdk]  - Pack directory into VDK");
+            Console.WriteLine("  VDK_Tool.exe p <dir> [output.vdk]     - Same as pack");
             Console.WriteLine();
             Console.WriteLine("CT Conversion Commands:");
             Console.WriteLine("  VDK_Tool.exe ct2xlsx <file.ct>       - Convert CT to XLSX");
@@ -433,6 +445,58 @@ namespace VDKTool
                 processor.Write(outputPath, processor.Headers, processor.Types, processor.Rows);
 
                 Console.WriteLine($"Done!");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return 1;
+            }
+        }
+
+        static int PackDirectory(string[] args)
+        {
+            string sourceDir = args[1];
+
+            if (!Directory.Exists(sourceDir))
+            {
+                Console.WriteLine($"Error: Directory not found: {sourceDir}");
+                return 1;
+            }
+
+            // Determine output file
+            string outputFile;
+            if (args.Length >= 3 && !string.IsNullOrEmpty(args[2]))
+            {
+                outputFile = args[2];
+            }
+            else
+            {
+                // Default: directory name + .VDK
+                string dirName = Path.GetFileName(sourceDir.TrimEnd('\\', '/'));
+                string parentDir = Path.GetDirectoryName(sourceDir);
+                outputFile = Path.Combine(parentDir, dirName + ".VDK");
+            }
+
+            Console.WriteLine($"Packing: {sourceDir}");
+            Console.WriteLine($"Output: {outputFile}");
+
+            try
+            {
+                var writer = new VDKWriter();
+
+                Console.WriteLine("Reading files...");
+                writer.AddDirectory(sourceDir, (current, total, file) =>
+                {
+                    if (current % 100 == 0 || current == total)
+                        Console.WriteLine($"  Added {current}/{total} files...");
+                });
+
+                Console.WriteLine("Compressing and writing...");
+                int count = writer.Write(outputFile, compress: true);
+
+                Console.WriteLine();
+                Console.WriteLine($"Done! Packed {count} files");
                 return 0;
             }
             catch (Exception ex)
